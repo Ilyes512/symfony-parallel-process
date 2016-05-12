@@ -1,6 +1,8 @@
 <?php
 namespace Jack\Symfony;
 
+use SuperClosure\Analyzer\TokenAnalyzer;
+use SuperClosure\Serializer;
 use Symfony\Component\Process\Process;
 
 /**
@@ -8,6 +10,16 @@ use Symfony\Component\Process\Process;
  */
 class ProcessManager
 {
+    /**
+     * Contains all (optional) extra conditionals before firing a new process.
+     */
+    protected $extraConditions = [];
+
+    /**
+     * May contain a SuperClosure\Serializer instance
+     */
+    protected $serializer;
+
     /**
      * @param Process[] $processes
      * @param int $maxParallel
@@ -50,7 +62,20 @@ class ProcessManager
                 }
             }
             // continue loop while there are processes being executed or waiting for execution
-        } while (count($processesQueue) > 0 || count($currentProcesses) > 0);
+        } while ((count($processesQueue) > 0 || count($currentProcesses) > 0) && $this->extraConditional());
+    }
+
+    /**
+     * Add a new extra condition that will have to return true before executing a new
+     * process.
+     *
+     * @return self
+     */
+    public function addConditional($condition)
+    {
+        $this->extraConditions[] = $condition;
+
+        return $this;
     }
 
     /**
@@ -67,5 +92,41 @@ class ProcessManager
                 throw new \InvalidArgumentException('Process in array need to be instance of Symfony Process');
             }
         }
+    }
+
+    /**
+     * Apply extra conditions before executing a process. Returns true if we can continue.
+     *
+     * @return bool
+     */
+    protected function extraConditional()
+    {
+        if (empty($this->extraConditions)) {
+            return true;
+        }
+
+        foreach ($this->extraConditions as $condition) {
+            if (!$this->getSerializer()->unserialize($condition)()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the serializer
+     *
+     * @return void
+     */
+    protected function getSerializer()
+    {
+        if (empty($this->serializer)) {
+            $this->serializer = app(Serializer::class, [
+                'analyzer' => app(TokenAnalyzer::class),
+            ]);
+        }
+
+        return $this->serializer;
     }
 }
