@@ -69,7 +69,9 @@ class ProcessManager
      * Add a new extra condition that will have to return true before executing a new
      * process.
      *
-     * @return self
+     * @param $condition
+     *
+     * @return static
      */
     public function addConditional($condition)
     {
@@ -79,6 +81,8 @@ class ProcessManager
     }
 
     /**
+     * Validate the processes before we process them.
+     *
      * @param Process[] $processes
      */
     protected function validateProcesses(array $processes)
@@ -106,7 +110,9 @@ class ProcessManager
         }
 
         foreach ($this->extraConditions as $condition) {
-            if (!$this->getSerializer()->unserialize($condition)()) {
+            $unserialized = $this->getSerializer()->unserialize($condition);
+
+            if (!$unserialized()) {
                 return false;
             }
         }
