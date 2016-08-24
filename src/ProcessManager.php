@@ -55,7 +55,7 @@ class ProcessManager
             // wait for the given time
             usleep($poll);
 
-            if ($this->extraConditional()) {
+            if (!$this->extraConditional()) {
                 $this->stopAllCurrentProcesses();
 
                 break;
