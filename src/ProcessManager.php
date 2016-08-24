@@ -11,6 +11,13 @@ use Symfony\Component\Process\Process;
 class ProcessManager
 {
     /**
+     * This will store all current (possibly running) processes
+     *
+     * @var array
+     */
+    protected $currentProcesses = [];
+
+    /**
      * Contains all (optional) extra conditionals before firing a new process.
      */
     protected $extraConditions = [];
@@ -22,8 +29,8 @@ class ProcessManager
 
     /**
      * @param Process[] $processes
-     * @param int $maxParallel
-     * @param int $poll
+     * @param int       $maxParallel
+     * @param int       $poll
      */
     public function runParallel(array $processes, $maxParallel, $poll = 1000)
     {
@@ -36,11 +43,11 @@ class ProcessManager
         $maxParallel = min(abs($maxParallel), count($processesQueue));
 
         // get the first stack of processes to start at the same time
-        /** @var Process[] $currentProcesses */
-        $currentProcesses = array_splice($processesQueue, 0, $maxParallel);
+        /** @var Process[] $this ->currentProcesses */
+        $this->currentProcesses = array_splice($processesQueue, 0, $maxParallel);
 
         // start the initial stack of processes
-        foreach ($currentProcesses as $process) {
+        foreach ($this->currentProcesses as $process) {
             $process->start();
         }
 
@@ -48,21 +55,41 @@ class ProcessManager
             // wait for the given time
             usleep($poll);
 
+            if ($this->extraConditional()) {
+                $this->stopAllCurrentProcesses();
+
+                break;
+            }
+
             // remove all finished processes from the stack
-            foreach ($currentProcesses as $index => $process) {
+            foreach ($this->currentProcesses as $index => $process) {
                 if (!$process->isRunning()) {
-                    unset($currentProcesses[$index]);
+                    unset($this->currentProcesses[$index]);
 
                     // directly add and start new process after the previous finished
                     if (count($processesQueue) > 0) {
                         $nextProcess = array_shift($processesQueue);
                         $nextProcess->start();
-                        $currentProcesses[] = $nextProcess;
+                        $this->currentProcesses[] = $nextProcess;
                     }
                 }
             }
             // continue loop while there are processes being executed or waiting for execution
-        } while ((count($processesQueue) > 0 || count($currentProcesses) > 0) && $this->extraConditional());
+        } while (count($processesQueue) > 0 || count($this->currentProcesses) > 0);
+    }
+
+    /**
+     * Stop all current processes.
+     *
+     * @param int $timeout
+     */
+    public function stopAllCurrentProcesses($timeout = 30)
+    {
+        foreach ($this->currentProcesses as $process) {
+            $process->stop($timeout);
+        }
+
+        $this->currentProcesses = [];
     }
 
     /**
